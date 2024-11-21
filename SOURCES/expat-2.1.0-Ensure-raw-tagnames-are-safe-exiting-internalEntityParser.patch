@@ -1,0 +1,117 @@
+commit 717421569bd8217a441ed10690a8f92cd6968d56
+Author: Tomas Korbar <tkorbar@redhat.com>
+Date:   Mon Oct 3 13:10:23 2022 +0200
+
+    Fix CVE-2022-40674
+
+diff --git a/lib/xmlparse.c b/lib/xmlparse.c
+index 989ab8c..4ce7209 100644
+--- a/lib/xmlparse.c
++++ b/lib/xmlparse.c
+@@ -5221,8 +5221,14 @@ internalEntityProcessor(XML_Parser parser,
+   {
+     processor = contentProcessor;
+     /* see externalEntityContentProcessor vs contentProcessor */
+-    return doContent(parser, parentParser ? 1 : 0, encoding, s, end,
+-                     nextPtr, (XML_Bool)!ps_finalBuffer);
++    result = doContent(parser, parser->m_parentParser ? 1 : 0, parser->m_encoding,
++                      s, end, nextPtr,
++                      (XML_Bool)! parser->m_parsingStatus.finalBuffer);
++    if (result == XML_ERROR_NONE) {
++      if (! storeRawNames(parser))
++        return XML_ERROR_NO_MEMORY;
++    }
++    return result;
+   }
+ }
+ 
+diff --git a/tests/runtests.c b/tests/runtests.c
+index c01f096..b83b47e 100644
+--- a/tests/runtests.c
++++ b/tests/runtests.c
+@@ -1650,6 +1650,77 @@ START_TEST(test_utf8_in_start_tags) {
+ }
+ END_TEST
+ 
++void
++suspending_comment_handler(void *userData, const XML_Char *UNUSED_P(data)) {
++  XML_Parser parser = (XML_Parser)userData;
++  XML_StopParser(parser, XML_TRUE);
++}
++
++START_TEST(test_suspend_resume_internal_entity_issue_629) {
++  const char *const text
++      = "<!DOCTYPE a [<!ENTITY e '<!--COMMENT-->a'>]><a>&e;<b>\n"
++        "<"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
++        "/>"
++        "</b></a>";
++  const size_t firstChunkSizeBytes = 54;
++
++  XML_Parser parser = XML_ParserCreate(NULL);
++  XML_SetUserData(parser, parser);
++  XML_SetCommentHandler(parser, suspending_comment_handler);
++
++  if (XML_Parse(parser, text, (int)firstChunkSizeBytes, XML_FALSE)
++      != XML_STATUS_SUSPENDED)
++    xml_failure(parser);
++  if (XML_ResumeParser(parser) != XML_STATUS_OK)
++    xml_failure(parser);
++  if (XML_Parse(parser, text + firstChunkSizeBytes,
++                (int)(strlen(text) - firstChunkSizeBytes), XML_TRUE)
++      != XML_STATUS_OK)
++    xml_failure(parser);
++  XML_ParserFree(parser);
++}
++END_TEST
++
+ static Suite *
+ make_suite(void)
+ {
+@@ -1705,6 +1776,7 @@ make_suite(void)
+     tcase_add_test(tc_basic, test_suspend_parser_between_char_data_calls);
+     tcase_add_test(tc_basic, test_utf8_in_start_tags);
+     tcase_add_test(tc_basic, test_bad_doctype_utf8);
++    tcase_add_test(tc_basic, test_suspend_resume_internal_entity_issue_629);
+ 
+     suite_add_tcase(s, tc_namespace);
+     tcase_add_checked_fixture(tc_namespace,

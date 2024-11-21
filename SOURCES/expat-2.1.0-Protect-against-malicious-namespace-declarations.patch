@@ -1,0 +1,354 @@
+commit f9ba0addb8e60cb72f8a8524fb4379d741cd4e7d
+Author: Tomas Korbar <tkorbar@redhat.com>
+Date:   Mon Mar 21 12:42:50 2022 +0100
+
+    Protect against malicious namespace declarations
+
+diff --git a/lib/xmlparse.c b/lib/xmlparse.c
+index 87d1a98..4bfb860 100644
+--- a/lib/xmlparse.c
++++ b/lib/xmlparse.c
+@@ -679,8 +679,7 @@ XML_ParserCreate(const XML_Char *encodingName)
+ XML_Parser XMLCALL
+ XML_ParserCreateNS(const XML_Char *encodingName, XML_Char nsSep)
+ {
+-  XML_Char tmp[2];
+-  *tmp = nsSep;
++  XML_Char tmp[2] = {nsSep, 0};
+   return XML_ParserCreate_MM(encodingName, NULL, tmp);
+ }
+ 
+@@ -1044,8 +1043,7 @@ XML_ExternalEntityParserCreate(XML_Parser oldParser,
+      would be otherwise.
+   */
+   if (ns) {
+-    XML_Char tmp[2];
+-    *tmp = namespaceSeparator;
++    XML_Char tmp[2] = {parser->m_namespaceSeparator, 0};
+     parser = parserCreate(encodingName, &parser->m_mem, tmp, newDtd);
+   }
+   else {
+@@ -3173,6 +3171,117 @@ storeAtts(XML_Parser parser, const ENCODING *enc,
+   return XML_ERROR_NONE;
+ }
+ 
++static XML_Bool
++is_rfc3986_uri_char(XML_Char candidate) {
++  // For the RFC 3986 ANBF grammar see
++  // https://datatracker.ietf.org/doc/html/rfc3986#appendix-A
++
++  switch (candidate) {
++  // From rule "ALPHA" (uppercase half)
++  case 'A':
++  case 'B':
++  case 'C':
++  case 'D':
++  case 'E':
++  case 'F':
++  case 'G':
++  case 'H':
++  case 'I':
++  case 'J':
++  case 'K':
++  case 'L':
++  case 'M':
++  case 'N':
++  case 'O':
++  case 'P':
++  case 'Q':
++  case 'R':
++  case 'S':
++  case 'T':
++  case 'U':
++  case 'V':
++  case 'W':
++  case 'X':
++  case 'Y':
++  case 'Z':
++
++  // From rule "ALPHA" (lowercase half)
++  case 'a':
++  case 'b':
++  case 'c':
++  case 'd':
++  case 'e':
++  case 'f':
++  case 'g':
++  case 'h':
++  case 'i':
++  case 'j':
++  case 'k':
++  case 'l':
++  case 'm':
++  case 'n':
++  case 'o':
++  case 'p':
++  case 'q':
++  case 'r':
++  case 's':
++  case 't':
++  case 'u':
++  case 'v':
++  case 'w':
++  case 'x':
++  case 'y':
++  case 'z':
++
++  // From rule "DIGIT"
++  case '0':
++  case '1':
++  case '2':
++  case '3':
++  case '4':
++  case '5':
++  case '6':
++  case '7':
++  case '8':
++  case '9':
++
++  // From rule "pct-encoded"
++  case '%':
++
++  // From rule "unreserved"
++  case '-':
++  case '.':
++  case '_':
++  case '~':
++
++  // From rule "gen-delims"
++  case ':':
++  case '/':
++  case '?':
++  case '#':
++  case '[':
++  case ']':
++  case '@':
++
++  // From rule "sub-delims"
++  case '!':
++  case '$':
++  case '&':
++  case '\'':
++  case '(':
++  case ')':
++  case '*':
++  case '+':
++  case ',':
++  case ';':
++  case '=':
++    return XML_TRUE;
++
++  default:
++    return XML_FALSE;
++  }
++}
++
+ /* addBinding() overwrites the value of prefix->binding without checking.
+    Therefore one must keep track of the old value outside of addBinding().
+ */
+@@ -3233,6 +3342,29 @@ addBinding(XML_Parser parser, PREFIX *prefix, const ATTRIBUTE_ID *attId,
+     if (!mustBeXML && isXMLNS
+         && (len > xmlnsLen || uri[len] != xmlnsNamespace[len]))
+       isXMLNS = XML_FALSE;
++
++    // NOTE: While Expat does not validate namespace URIs against RFC 3986
++    //       today (and is not REQUIRED to do so with regard to the XML 1.0
++    //       namespaces specification) we have to at least make sure, that
++    //       the application on top of Expat (that is likely splitting expanded
++    //       element names ("qualified names") of form
++    //       "[uri sep] local [sep prefix] '\0'" back into 1, 2 or 3 pieces
++    //       in its element handler code) cannot be confused by an attacker
++    //       putting additional namespace separator characters into namespace
++    //       declarations.  That would be ambiguous and not to be expected.
++    //
++    //       While the HTML API docs of function XML_ParserCreateNS have been
++    //       advising against use of a namespace separator character that can
++    //       appear in a URI for >20 years now, some widespread applications
++    //       are using URI characters (':' (colon) in particular) for a
++    //       namespace separator, in practice.  To keep these applications
++    //       functional, we only reject namespaces URIs containing the
++    //       application-chosen namespace separator if the chosen separator
++    //       is a non-URI character with regard to RFC 3986.
++    if (parser->m_ns && (uri[len] == parser->m_namespaceSeparator)
++        && ! is_rfc3986_uri_char(uri[len])) {
++      return XML_ERROR_SYNTAX;
++    }
+   }
+   isXML = isXML && len == xmlLen;
+   isXMLNS = isXMLNS && len == xmlnsLen;
+diff --git a/tests/runtests.c b/tests/runtests.c
+index b99e375..86f8b18 100644
+--- a/tests/runtests.c
++++ b/tests/runtests.c
+@@ -31,6 +31,13 @@
+ 
+ static XML_Parser parser;
+ 
++#ifndef UNUSED_P
++# ifdef __GNUC__
++#  define UNUSED_P(p) UNUSED_ ## p __attribute__((__unused__))
++# else
++#  define UNUSED_P(p) UNUSED_ ## p
++# endif
++#endif
+ 
+ static void
+ basic_setup(void)
+@@ -40,6 +47,10 @@ basic_setup(void)
+         fail("Parser not created.");
+ }
+ 
++static void
++dummy_end_element(void *UNUSED_P(userData), const XML_Char *UNUSED_P(name))
++{}
++
+ static void
+ basic_teardown(void)
+ {
+@@ -1499,6 +1510,138 @@ START_TEST(test_ns_unbound_prefix_on_element)
+ }
+ END_TEST
+ 
++START_TEST(test_ns_separator_in_uri) {
++  struct test_case {
++    enum XML_Status expectedStatus;
++    const char *doc;
++    XML_Char namesep;
++  };
++  struct test_case cases[] = {
++      {XML_STATUS_OK, "<doc xmlns='one_two' />", '\n'},
++      {XML_STATUS_ERROR, "<doc xmlns='one&#x0A;two' />", '\n'},
++      {XML_STATUS_OK, "<doc xmlns='one:two' />", ':'},
++  };
++
++  size_t i = 0;
++  size_t failCount = 0;
++  for (; i < sizeof(cases) / sizeof(cases[0]); i++) {
++    XML_Parser parser = XML_ParserCreateNS(NULL, cases[i].namesep);
++    XML_SetElementHandler(parser, dummy_start_element, dummy_end_element);
++    if (XML_Parse(parser, cases[i].doc, (int)strlen(cases[i].doc),
++                  /*isFinal*/ XML_TRUE)
++        != cases[i].expectedStatus) {
++      failCount++;
++    }
++    XML_ParserFree(parser);
++  }
++
++  if (failCount) {
++    fail("Namespace separator handling is broken");
++  }
++}
++END_TEST
++
++
++START_TEST(test_utf8_in_start_tags) {
++  struct test_case {
++    bool goodName;
++    bool goodNameStart;
++    const char *tagName;
++  };
++
++  // The idea with the tests below is this:
++  // We want to cover 1-, 2- and 3-byte sequences, 4-byte sequences
++  // go to isNever and are hence not a concern.
++  //
++  // We start with a character that is a valid name character
++  // (or even name-start character, see XML 1.0r4 spec) and then we flip
++  // single bits at places where (1) the result leaves the UTF-8 encoding space
++  // and (2) we stay in the same n-byte sequence family.
++  //
++  // The flipped bits are highlighted in angle brackets in comments,
++  // e.g. "[<1>011 1001]" means we had [0011 1001] but we now flipped
++  // the most significant bit to 1 to leave UTF-8 encoding space.
++  struct test_case cases[] = {
++      // 1-byte UTF-8: [0xxx xxxx]
++      {true, true, "\x3A"},   // [0011 1010] = ASCII colon ':'
++      {false, false, "\xBA"}, // [<1>011 1010]
++      {true, false, "\x39"},  // [0011 1001] = ASCII nine '9'
++      {false, false, "\xB9"}, // [<1>011 1001]
++
++      // 2-byte UTF-8: [110x xxxx] [10xx xxxx]
++      {true, true, "\xDB\xA5"},   // [1101 1011] [1010 0101] =
++                                  // Arabic small waw U+06E5
++      {false, false, "\x9B\xA5"}, // [1<0>01 1011] [1010 0101]
++      {false, false, "\xDB\x25"}, // [1101 1011] [<0>010 0101]
++      {false, false, "\xDB\xE5"}, // [1101 1011] [1<1>10 0101]
++      {true, false, "\xCC\x81"},  // [1100 1100] [1000 0001] =
++                                  // combining char U+0301
++      {false, false, "\x8C\x81"}, // [1<0>00 1100] [1000 0001]
++      {false, false, "\xCC\x01"}, // [1100 1100] [<0>000 0001]
++      {false, false, "\xCC\xC1"}, // [1100 1100] [1<1>00 0001]
++
++      // 3-byte UTF-8: [1110 xxxx] [10xx xxxx] [10xxxxxx]
++      {true, true, "\xE0\xA4\x85"},   // [1110 0000] [1010 0100] [1000 0101] =
++                                      // Devanagari Letter A U+0905
++      {false, false, "\xA0\xA4\x85"}, // [1<0>10 0000] [1010 0100] [1000 0101]
++      {false, false, "\xE0\x24\x85"}, // [1110 0000] [<0>010 0100] [1000 0101]
++      {false, false, "\xE0\xE4\x85"}, // [1110 0000] [1<1>10 0100] [1000 0101]
++      {false, false, "\xE0\xA4\x05"}, // [1110 0000] [1010 0100] [<0>000 0101]
++      {false, false, "\xE0\xA4\xC5"}, // [1110 0000] [1010 0100] [1<1>00 0101]
++      {true, false, "\xE0\xA4\x81"},  // [1110 0000] [1010 0100] [1000 0001] =
++                                      // combining char U+0901
++      {false, false, "\xA0\xA4\x81"}, // [1<0>10 0000] [1010 0100] [1000 0001]
++      {false, false, "\xE0\x24\x81"}, // [1110 0000] [<0>010 0100] [1000 0001]
++      {false, false, "\xE0\xE4\x81"}, // [1110 0000] [1<1>10 0100] [1000 0001]
++      {false, false, "\xE0\xA4\x01"}, // [1110 0000] [1010 0100] [<0>000 0001]
++      {false, false, "\xE0\xA4\xC1"}, // [1110 0000] [1010 0100] [1<1>00 0001]
++  };
++  const bool atNameStart[] = {true, false};
++
++  size_t i = 0;
++  char doc[1024];
++  size_t failCount = 0;
++
++  for (; i < sizeof(cases) / sizeof(cases[0]); i++) {
++    size_t j = 0;
++    for (; j < sizeof(atNameStart) / sizeof(atNameStart[0]); j++) {
++      const bool expectedSuccess
++          = atNameStart[j] ? cases[i].goodNameStart : cases[i].goodName;
++      sprintf(doc, "<%s%s><!--", atNameStart[j] ? "" : "a", cases[i].tagName);
++      XML_Parser parser = XML_ParserCreate(NULL);
++
++      const enum XML_Status status
++          = XML_Parse(parser, doc, (int)strlen(doc), /*isFinal=*/XML_FALSE);
++
++      bool success = true;
++      if ((status == XML_STATUS_OK) != expectedSuccess) {
++        success = false;
++      }
++      if ((status == XML_STATUS_ERROR)
++          && (XML_GetErrorCode(parser) != XML_ERROR_INVALID_TOKEN)) {
++        success = false;
++      }
++
++      if (! success) {
++        fprintf(
++            stderr,
++            "FAIL case %2u (%sat name start, %u-byte sequence, error code %d)\n",
++            (unsigned)i + 1u, atNameStart[j] ? "    " : "not ",
++            (unsigned)strlen(cases[i].tagName), XML_GetErrorCode(parser));
++        failCount++;
++      }
++
++      XML_ParserFree(parser);
++    
++  }
++
++  if (failCount > 0) {
++    fail("UTF-8 regression detected");
++  }
++}
++}
++END_TEST
++
+ static Suite *
+ make_suite(void)
+ {
+@@ -1569,6 +1712,7 @@ make_suite(void)
+     tcase_add_test(tc_namespace, test_ns_duplicate_attrs_diff_prefixes);
+     tcase_add_test(tc_namespace, test_ns_unbound_prefix_on_attribute);
+     tcase_add_test(tc_namespace, test_ns_unbound_prefix_on_element);
++    tcase_add_test(tc_namespace, test_ns_separator_in_uri);
+ 
+ #ifdef XML_DTD
+     tcase_add_test(tc_basic,

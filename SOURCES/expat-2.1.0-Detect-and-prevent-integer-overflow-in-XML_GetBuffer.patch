@@ -1,0 +1,243 @@
+commit 513535dbf339c5c5dd38b77809c6a88969c05109
+Author: Tomas Korbar <tkorbar@redhat.com>
+Date:   Mon Feb 21 13:42:02 2022 +0100
+
+    CVE-2022-23852
+
+diff --git a/lib/xmlparse.c b/lib/xmlparse.c
+index 2ebd80f..d4f30b7 100644
+--- a/lib/xmlparse.c
++++ b/lib/xmlparse.c
+@@ -75,6 +75,9 @@ typedef char ICHAR;
+ /* Round up n to be a multiple of sz, where sz is a power of 2. */
+ #define ROUND_UP(n, sz) (((n) + ((sz) - 1)) & ~((sz) - 1))
+ 
++/* Do safe (NULL-aware) pointer arithmetic */
++#define EXPAT_SAFE_PTR_DIFF(p, q) (((p) && (q)) ? ((p) - (q)) : 0)
++
+ /* Handle the case where memmove() doesn't exist. */
+ #ifndef HAVE_MEMMOVE
+ #ifdef HAVE_BCOPY
+@@ -1678,50 +1681,70 @@ XML_ParseBuffer(XML_Parser parser, int len, int isFinal)
+ void * XMLCALL
+ XML_GetBuffer(XML_Parser parser, int len)
+ {
++  if (parser == NULL)
++    return NULL;
+   if (len < 0) {
+-    errorCode = XML_ERROR_NO_MEMORY;
++    parser->m_errorCode = XML_ERROR_NO_MEMORY;
+     return NULL;
+   }
+-  switch (ps_parsing) {
++  switch (parser->m_parsingStatus.parsing) {
+   case XML_SUSPENDED:
+-    errorCode = XML_ERROR_SUSPENDED;
++    parser->m_errorCode = XML_ERROR_SUSPENDED;
+     return NULL;
+   case XML_FINISHED:
+-    errorCode = XML_ERROR_FINISHED;
++    parser->m_errorCode = XML_ERROR_FINISHED;
+     return NULL;
+   default: ;
+   }
+ 
+-  if (len > bufferLim - bufferEnd) {
+-    int neededSize = (int) ((unsigned)len + (unsigned)(bufferEnd - bufferPtr));
++  if (len > EXPAT_SAFE_PTR_DIFF(parser->m_bufferLim, parser->m_bufferEnd)) {
++    int keep;
++    /* Do not invoke signed arithmetic overflow: */
++    int neededSize = (int)((unsigned)len
++                           + (unsigned)EXPAT_SAFE_PTR_DIFF(
++                               parser->m_bufferEnd, parser->m_bufferPtr));
+     if (neededSize < 0) {
+-      errorCode = XML_ERROR_NO_MEMORY;
++      parser->m_errorCode = XML_ERROR_NO_MEMORY;
+       return NULL;
+     }
+-#ifdef XML_CONTEXT_BYTES
+-    int keep = (int)(bufferPtr - buffer);
+ 
++    keep = (int)EXPAT_SAFE_PTR_DIFF(parser->m_bufferPtr, parser->m_buffer);
+     if (keep > XML_CONTEXT_BYTES)
+       keep = XML_CONTEXT_BYTES;
++    /* Detect and prevent integer overflow */
++    if (keep > INT_MAX - neededSize) {
++      parser->m_errorCode = XML_ERROR_NO_MEMORY;
++      return NULL;
++    }
+     neededSize += keep;
+-#endif  /* defined XML_CONTEXT_BYTES */
+-    if (neededSize  <= bufferLim - buffer) {
++    if (neededSize
++        <= EXPAT_SAFE_PTR_DIFF(parser->m_bufferLim, parser->m_buffer)) {
+ #ifdef XML_CONTEXT_BYTES
+-      if (keep < bufferPtr - buffer) {
+-        int offset = (int)(bufferPtr - buffer) - keep;
+-        memmove(buffer, &buffer[offset], bufferEnd - bufferPtr + keep);
+-        bufferEnd -= offset;
+-        bufferPtr -= offset;
++      if (keep < EXPAT_SAFE_PTR_DIFF(parser->m_bufferPtr, parser->m_buffer)) {
++        int offset
++            = (int)EXPAT_SAFE_PTR_DIFF(parser->m_bufferPtr, parser->m_buffer)
++              - keep;
++        /* The buffer pointers cannot be NULL here; we have at least some bytes
++         * in the buffer */
++        memmove(parser->m_buffer, &parser->m_buffer[offset],
++                parser->m_bufferEnd - parser->m_bufferPtr + keep);
++        parser->m_bufferEnd -= offset;
++        parser->m_bufferPtr -= offset;
+       }
+ #else
+-      memmove(buffer, bufferPtr, bufferEnd - bufferPtr);
+-      bufferEnd = buffer + (bufferEnd - bufferPtr);
+-      bufferPtr = buffer;
+-#endif  /* not defined XML_CONTEXT_BYTES */
+-    }
+-    else {
++      if (parser->m_buffer && parser->m_bufferPtr) {
++        memmove(parser->m_buffer, parser->m_bufferPtr,
++                EXPAT_SAFE_PTR_DIFF(parser->m_bufferEnd, parser->m_bufferPtr));
++        parser->m_bufferEnd
++            = parser->m_buffer
++              + EXPAT_SAFE_PTR_DIFF(parser->m_bufferEnd, parser->m_bufferPtr);
++        parser->m_bufferPtr = parser->m_buffer;
++      }
++#endif /* not defined XML_CONTEXT_BYTES */
++    } else {
+       char *newBuf;
+-      int bufferSize = (int)(bufferLim - bufferPtr);
++      int bufferSize
++          = (int)EXPAT_SAFE_PTR_DIFF(parser->m_bufferLim, parser->m_bufferPtr);
+       if (bufferSize == 0)
+         bufferSize = INIT_BUFFER_SIZE;
+       do {
+@@ -1729,43 +1752,51 @@ XML_GetBuffer(XML_Parser parser, int len)
+         bufferSize = (int) (2U * (unsigned) bufferSize);
+       } while (bufferSize < neededSize && bufferSize > 0);
+       if (bufferSize <= 0) {
+-        errorCode = XML_ERROR_NO_MEMORY;
++        parser->m_errorCode = XML_ERROR_NO_MEMORY;
+         return NULL;
+       }
+       newBuf = (char *)MALLOC(bufferSize);
+       if (newBuf == 0) {
+-        errorCode = XML_ERROR_NO_MEMORY;
++        parser->m_errorCode = XML_ERROR_NO_MEMORY;
+         return NULL;
+       }
+-      bufferLim = newBuf + bufferSize;
++      parser->m_bufferLim = newBuf + bufferSize;
+ #ifdef XML_CONTEXT_BYTES
+-      if (bufferPtr) {
+-        int keep = (int)(bufferPtr - buffer);
+-        if (keep > XML_CONTEXT_BYTES)
+-          keep = XML_CONTEXT_BYTES;
+-        memcpy(newBuf, &bufferPtr[-keep], bufferEnd - bufferPtr + keep);
+-        FREE(buffer);
+-        buffer = newBuf;
+-        bufferEnd = buffer + (bufferEnd - bufferPtr) + keep;
+-        bufferPtr = buffer + keep;
+-      }
+-      else {
+-        bufferEnd = newBuf + (bufferEnd - bufferPtr);
+-        bufferPtr = buffer = newBuf;
++      if (parser->m_bufferPtr) {
++        memcpy(newBuf, &parser->m_bufferPtr[-keep],
++               EXPAT_SAFE_PTR_DIFF(parser->m_bufferEnd, parser->m_bufferPtr)
++                   + keep);
++        FREE(parser->m_buffer);
++        parser->m_buffer = newBuf;
++        parser->m_bufferEnd
++            = parser->m_buffer
++              + EXPAT_SAFE_PTR_DIFF(parser->m_bufferEnd, parser->m_bufferPtr)
++              + keep;
++        parser->m_bufferPtr = parser->m_buffer + keep;
++      } else {
++        /* This must be a brand new buffer with no data in it yet */
++        parser->m_bufferEnd = newBuf;
++        parser->m_bufferPtr = parser->m_buffer = newBuf;
+       }
+ #else
+-      if (bufferPtr) {
+-        memcpy(newBuf, bufferPtr, bufferEnd - bufferPtr);
+-        FREE(buffer);
++      if (parser->m_bufferPtr) {
++        memcpy(newBuf, parser->m_bufferPtr,
++               EXPAT_SAFE_PTR_DIFF(parser->m_bufferEnd, parser->m_bufferPtr));
++        FREE(parser->m_buffer);
++        parser->m_bufferEnd
++            = newBuf
++              + EXPAT_SAFE_PTR_DIFF(parser->m_bufferEnd, parser->m_bufferPtr);
++      } else {
++        /* This must be a brand new buffer with no data in it yet */
++        parser->m_bufferEnd = newBuf;
+       }
+-      bufferEnd = newBuf + (bufferEnd - bufferPtr);
+-      bufferPtr = buffer = newBuf;
++      parser->m_bufferPtr = parser->m_buffer = newBuf;
+ #endif  /* not defined XML_CONTEXT_BYTES */
+     }
+-    eventPtr = eventEndPtr = NULL;
+-    positionPtr = NULL;
++    parser->m_eventPtr = parser->m_eventEndPtr = NULL;
++    parser->m_positionPtr = NULL;
+   }
+-  return bufferEnd;
++  return parser->m_bufferEnd;
+ }
+ 
+ enum XML_Status XMLCALL
+diff --git a/tests/runtests.c b/tests/runtests.c
+index 233956e..b99e375 100644
+--- a/tests/runtests.c
++++ b/tests/runtests.c
+@@ -13,6 +13,7 @@
+ #include <stdio.h>
+ #include <string.h>
+ #include <stdint.h>
++#include <limits.h>
+ 
+ #include "expat.h"
+ #include "chardata.h"
+@@ -149,6 +150,30 @@ dummy_start_element(void *userData,
+ {}
+ 
+ 
++/* Test for signed integer overflow CVE-2022-23852 */
++#if defined(XML_CONTEXT_BYTES)
++START_TEST(test_get_buffer_3_overflow) {
++  XML_Parser parser = XML_ParserCreate(NULL);
++  assert(parser != NULL);
++
++  const char *const text = "\n";
++  const int expectedKeepValue = (int)strlen(text);
++
++  // After this call, variable "keep" in XML_GetBuffer will
++  // have value expectedKeepValue
++  if (XML_Parse(parser, text, (int)strlen(text), XML_FALSE /* isFinal */)
++      == XML_STATUS_ERROR)
++    xml_failure(parser);
++
++  assert(expectedKeepValue > 0);
++  if (XML_GetBuffer(parser, INT_MAX - expectedKeepValue + 1) != NULL)
++    fail("enlarging buffer not failed");
++
++  XML_ParserFree(parser);
++}
++END_TEST
++#endif // defined(XML_CONTEXT_BYTES)
++
+ /*
+  * Character & encoding tests.
+  */
+@@ -1483,6 +1508,9 @@ make_suite(void)
+ 
+     suite_add_tcase(s, tc_basic);
+     tcase_add_checked_fixture(tc_basic, basic_setup, basic_teardown);
++#if defined(XML_CONTEXT_BYTES)
++    tcase_add_test(tc_basic, test_get_buffer_3_overflow);
++#endif
+     tcase_add_test(tc_basic, test_nul_byte);
+     tcase_add_test(tc_basic, test_u0000_char);
+     tcase_add_test(tc_basic, test_bom_utf8);
