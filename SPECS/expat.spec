@@ -3,7 +3,7 @@
 Summary: An XML parser library
 Name: expat
 Version: %(echo %{unversion} | sed 's/_/./g')
-Release: 15%{?dist}
+Release: 17%{?dist}
 Source: https://github.com/libexpat/libexpat/archive/R_%{unversion}.tar.gz#/expat-%{version}.tar.gz
 URL: https://libexpat.github.io/
 License: MIT
@@ -26,6 +26,8 @@ Patch14: expat-2.2.5-CVE-2023-52425.patch
 Patch15: expat-2.2.5-CVE-2024-45490.patch
 Patch16: expat-2.2.5-CVE-2024-45491.patch
 Patch17: expat-2.2.5-CVE-2024-45492.patch
+Patch18: expat-2.2.5-CVE-2024-50602.patch
+Patch19: expat-2.2.5-CVE-2024-8176.patch
 
 %description
 This is expat, the C library for parsing XML, written by James Clark. Expat
@@ -72,6 +74,8 @@ pushd ..
 %patch15 -p1 -b .CVE-2024-45490
 %patch16 -p1 -b .CVE-2024-45491
 %patch17 -p1 -b .CVE-2024-45492
+%patch18 -p1 -b .CVE-2024-50602
+%patch19 -p1 -b .CVE-2024-8176
 popd
 
 sed -i 's/install-data-hook/do-nothing-please/' lib/Makefile.am
@@ -120,6 +124,14 @@ make check
 %{_libdir}/lib*.a
 
 %changelog
+* Mon Apr 07 2025 Tomas Korbar <tkorbar@redhat.com> - 2.2.5-17
+- Fix CVE-2024-8176
+- Resolves: RHEL-57477
+
+* Fri Nov 08 2024 Tomas Korbar <tkorbar@redhat.com> - 2.2.5-16
+- Fix CVE-2024-50602
+- Resolves: RHEL-65062
+
 * Wed Sep 11 2024 Tomas Korbar <tkorbar@redhat.com> - 2.2.5-15
 - Rebuild for test reconfiguration
 
