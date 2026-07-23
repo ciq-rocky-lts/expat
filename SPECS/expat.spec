@@ -3,7 +3,7 @@
 Summary: An XML parser library
 Name: expat
 Version: %(echo %{unversion} | sed 's/_/./g')
-Release:        5.1%{?dist}
+Release:        5.2%{?dist}
 Source: https://github.com/libexpat/libexpat/archive/R_%{unversion}.tar.gz#/expat-%{version}.tar.gz
 URL: https://libexpat.github.io/
 License: MIT
@@ -25,6 +25,8 @@ Patch5: expat-2.5.0-CVE-2024-50602.patch
 Patch6: expat-2.5.0-CVE-2024-8176.patch
 # https://git.rockylinux.org/staging/rpms/expat/-/raw/r8/SOURCES/expat-2.5.0-CVE-2025-59375.patch
 Patch7: expat-2.5.0-CVE-2025-59375.patch
+# https://git.rockylinux.org/staging/rpms/expat/-/raw/r8/SOURCES/expat-2.5.0-CVE-2026-45186.patch
+Patch8: expat-2.5.0-CVE-2026-45186.patch
 
 %description
 This is expat, the C library for parsing XML, written by James Clark. Expat
@@ -61,6 +63,7 @@ pushd ..
 %patch5 -p1 -b .CVE-2024-50602
 %patch6 -p1 -b .CVE-2024-8176
 %patch7 -p1 -b .CVE-2025-59375
+%patch8 -p1 -b .CVE-2026-45186
 popd
 
 sed -i 's/install-data-hook/do-nothing-please/' lib/Makefile.am
@@ -109,6 +112,9 @@ make check
 %{_libdir}/lib*.a
 
 %changelog
+* Wed Jul 22 2026 Jeff Uphoff <juphoff@ciq.com> - 2.5.0-5.2
+- Fix CVE-2026-45186
+
 * Wed Jul 22 2026 Jeff Uphoff <juphoff@ciq.com> - 2.5.0-5.1
 - Fix CVE-2025-59375
 
