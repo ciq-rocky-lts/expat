@@ -1,7 +1,7 @@
 Summary: An XML parser library
 Name: expat
 Version: 2.1.0
-Release: 16%{?dist}
+Release: 16.1%{?dist}
 Group: System Environment/Libraries
 Source: http://downloads.sourceforge.net/expat/expat-%{version}.tar.gz
 Patch0: expat-2.1.0-xmlwfargs.patch
@@ -18,6 +18,8 @@ Patch10: expat-2.1.0-Add-missing-validation-of-encoding.patch
 Patch11: expat-2.1.0-Prevent-integer-overflow-in-storeRawNames.patch
 Patch12: expat-2.1.0-Ensure-raw-tagnames-are-safe-exiting-internalEntityParser.patch
 Patch13: CVE-2016-9063.patch
+# CVE-2024-45491 — upstream backport
+Patch14: expat-2.1.0-CVE-2024-45491.patch
 
 URL: http://www.libexpat.org/
 License: MIT
@@ -66,6 +68,7 @@ Install it if you need to link statically with expat.
 %patch11 -p1 -b .CVE-2022-25315
 %patch12 -p1 -b .CVE-2022-40674
 %patch13 -p1 -b .CVE-2016-9063
+%patch14 -p1 -b .CVE-2024-45491
 
 %build
 rm -rf autom4te*.cache
@@ -112,6 +115,9 @@ rm -rf ${RPM_BUILD_ROOT}
 %{_libdir}/lib*.a
 
 %changelog
+* Fri Sep 04 2026 Jason Rodriguez <jrodriguez@ciq.com> - 2.1.0-16.1
+- Fix CVE-2024-45491
+
 * Thu Nov 21 2024 Matt Hink <mhink@ciq.com> - 2.1.0-16
 - Fix CVE-2016-9063
 
