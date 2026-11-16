@@ -1,0 +1,27 @@
+Make the reparse-deferral test counter increment atomic
+
+Rocky Linux's Patch0 (Red Hat's CVE-2023-52425 backport, as shipped in RHEL 8.10
+and upstream expat 2.6.0) increments the global test-only counter
+g_parseAttempts in callProcessor() for every parse. Separate parsers running in
+different threads race on it (a C data race). Upstream later replaced it with
+g_bytesScanned compiled only into test builds (commit fe0177cd); expat 2.5.0's
+tests link the production libexpatinternal.la, so instead increment it with a
+relaxed atomic (GCC __atomic builtin, available in EL7's GCC 4.8).
+Reported by Damenbot on centos/cbr/src/expat !2.
+
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 9e1228d..84d7222 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -1277,7 +1277,10 @@ callProcessor(XML_Parser parser, const char *start, const char *end,
+       return XML_ERROR_NONE;
+     }
+   }
+-  g_parseAttempts += 1;
++  /* CIQ: g_parseAttempts is a test-only counter shared by all parsers;
++     increment it atomically so independent parsers running in different
++     threads don't race on it (upstream later made it test-build-only). */
++  __atomic_fetch_add(&g_parseAttempts, 1, __ATOMIC_RELAXED);
+   // Run in a loop to eliminate dangerous recursion depths
+   enum XML_Error ret;
+   *endPtr = start;

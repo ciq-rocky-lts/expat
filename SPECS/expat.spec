@@ -1,30 +1,87 @@
+%global unversion 2_5_0
+
 Summary: An XML parser library
 Name: expat
-Version: 2.1.0
-Release: 16.1%{?dist}
-Group: System Environment/Libraries
-Source: http://downloads.sourceforge.net/expat/expat-%{version}.tar.gz
-Patch0: expat-2.1.0-xmlwfargs.patch
-Patch1: expat-2.1.0-CVE-2016-0718.patch
-Patch2: expat-2.1.0-CVE-2015-2716.patch
-Patch3: expat-2.1.0-CVE-2018-20843.patch
-Patch4: expat-2.1.0-CVE-2019-15903.patch
-Patch5:	expat-2.1.0-Detect-and-prevent-integer-overflow-in-XML_GetBuffer.patch
-Patch6:	expat-2.1.0-Detect-and-prevent-troublesome-left-shifts.patch
-Patch7:	expat-2.1.0-Prevent-integer-overflow-on-m_groupSize-in-function.patch
-Patch8:	expat-2.1.0-Prevent-more-integer-overflows.patch
-Patch9: expat-2.1.0-Protect-against-malicious-namespace-declarations.patch
-Patch10: expat-2.1.0-Add-missing-validation-of-encoding.patch
-Patch11: expat-2.1.0-Prevent-integer-overflow-in-storeRawNames.patch
-Patch12: expat-2.1.0-Ensure-raw-tagnames-are-safe-exiting-internalEntityParser.patch
-Patch13: CVE-2016-9063.patch
-# CVE-2024-45491 — upstream backport
-Patch14: expat-2.1.0-CVE-2024-45491.patch
-
-URL: http://www.libexpat.org/
+Version: %(echo %{unversion} | sed 's/_/./g')
+Release: 6.1%{?dist}
+Source: https://github.com/libexpat/libexpat/archive/R_%{unversion}.tar.gz#/expat-%{version}.tar.gz
+URL: https://libexpat.github.io/
 License: MIT
-BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
-BuildRequires: autoconf, automake, libtool, check-devel
+BuildRequires: autoconf, libtool, xmlto, gcc-c++
+BuildRequires: make
+# https://issues.redhat.com/browse/RHEL-24227
+Patch0: expat-2.5.0-CVE-2023-52425.patch
+# https://issues.redhat.com/browse/RHEL-28700
+Patch1: expat-2.5.0-CVE-2024-28757.patch
+# https://issues.redhat.com/browse/RHEL-56761
+Patch2: expat-2.5.0-CVE-2024-45490.patch
+# https://issues.redhat.com/browse/RHEL-57520
+Patch3: expat-2.5.0-CVE-2024-45491.patch
+# https://issues.redhat.com/browse/RHEL-57511
+Patch4: expat-2.5.0-CVE-2024-45492.patch
+# https://issues.redhat.com/browse/RHEL-65066
+Patch5: expat-2.5.0-CVE-2024-50602.patch
+# https://issues.redhat.com/browse/RHEL-57489
+Patch6: expat-2.5.0-CVE-2024-8176.patch
+# https://issues.redhat.com/browse/RHEL-114618
+Patch7: expat-2.5.0-CVE-2025-59375.patch
+# https://issues.redhat.com/browse/RHEL-177979
+# https://github.com/libexpat/libexpat/pull/1216
+Patch8: expat-2.5.0-CVE-2026-45186.patch
+# https://issues.redhat.com/browse/RHEL-220979
+# https://github.com/libexpat/libexpat/pull/1246
+Patch9: expat-2.5.0-CVE-2026-50219.patch
+# https://issues.redhat.com/browse/RHEL-221012
+# https://github.com/libexpat/libexpat/pull/1272
+Patch10: expat-2.5.0-CVE-2026-56132.patch
+# https://issues.redhat.com/browse/RHEL-268995
+# https://github.com/libexpat/libexpat/pull/1282
+Patch11: expat-2.5.0-CVE-2026-93990.patch
+# https://issues.redhat.com/browse/RHEL-260142
+# https://github.com/libexpat/libexpat/pull/1321
+Patch12: expat-2.5.0-CVE-2026-66046.patch
+# https://issues.redhat.com/browse/RHEL-277497
+# https://github.com/libexpat/libexpat/pull/1393
+Patch13: expat-2.5.0-CVE-2026-77214.patch
+# https://issues.redhat.com/browse/RHEL-272828
+# https://github.com/libexpat/libexpat/pull/1392
+Patch14: expat-2.5.0-CVE-2026-102633.patch
+
+# CIQ: upstream fixes backported to 2.5.0 for CentOS 7 Bridge
+# https://github.com/libexpat/libexpat/pull/1131
+Patch1001: expat-2.5.0-CVE-2026-24515.patch
+# https://github.com/libexpat/libexpat/pull/1158
+Patch1002: expat-2.5.0-CVE-2026-32776.patch
+# https://github.com/libexpat/libexpat/pull/1162
+Patch1003: expat-2.5.0-CVE-2026-32777.patch
+# https://github.com/libexpat/libexpat/pull/1163
+Patch1004: expat-2.5.0-CVE-2026-32778.patch
+# https://github.com/libexpat/libexpat/pull/1267
+Patch1005: expat-2.5.0-CVE-2026-56131.patch
+# https://github.com/libexpat/libexpat/pull/1322 (and #1329)
+Patch1006: expat-2.5.0-CVE-2026-76957.patch
+# https://github.com/libexpat/libexpat/pull/1444
+Patch1007: expat-2.5.0-CVE-2026-117610.patch
+# https://github.com/libexpat/libexpat/pull/1278
+Patch1008: expat-2.5.0-CVE-2026-56412.patch
+# https://github.com/libexpat/libexpat/pull/1262
+Patch1009: expat-2.5.0-CVE-2026-56407.patch
+# https://github.com/libexpat/libexpat/pull/1232
+Patch1010: expat-2.5.0-CVE-2026-56403.patch
+# https://github.com/libexpat/libexpat/pull/1450
+Patch1011: expat-2.5.0-CVE-2026-118370.patch
+# https://github.com/libexpat/libexpat/pull/1183
+Patch1012: expat-2.5.0-CVE-2026-41080.patch
+# https://github.com/libexpat/libexpat/pull/1249
+Patch1013: expat-2.5.0-CVE-2026-56404.patch
+# https://github.com/libexpat/libexpat/pull/1251
+Patch1014: expat-2.5.0-CVE-2026-56405.patch
+# CIQ: upstream regression tests for the backports above, ported to 2.5.0
+Patch1015: expat-2.5.0-ciq-backported-tests.patch
+# CIQ: atomic increment of Patch0's shared test counter (data race)
+Patch1016: expat-2.5.0-ciq-atomic-parse-counter.patch
+# CIQ: expand nested entities in external parameter-entity values (Patch6 regression)
+Patch1017: expat-2.5.0-ciq-pe-value-drain.patch
 
 %description
 This is expat, the C library for parsing XML, written by James Clark. Expat
@@ -36,8 +93,7 @@ register handlers.
 
 %package devel
 Summary: Libraries and header files to develop applications using expat
-Group: Development/Libraries
-Requires: expat = %{version}-%{release}
+Requires: expat%{?_isa} = %{version}-%{release}
 
 %description devel
 The expat-devel package contains the libraries, include files and documentation
@@ -45,7 +101,6 @@ to develop XML applications with expat.
 
 %package static
 Summary: expat XML parser static library
-Group: Development/Libraries
 Requires: expat-devel%{?_isa} = %{version}-%{release}
 
 %description static
@@ -53,79 +108,206 @@ The expat-static package contains the static version of the expat library.
 Install it if you need to link statically with expat.
 
 %prep
-%setup -q
-%patch0 -p1 -b .xmlwfargs
-%patch1 -p1 -b .cve0718
-%patch2 -p1 -b .cve2716
-%patch3 -p1 -b .cve20843
-%patch4 -p1 -b .cve15903
-%patch5 -p1 -b .CVE-2022-23852
-%patch6 -p1 -b .CVE-2021-45960
-%patch7 -p1 -b .CVE-2021-46143
-%patch8 -p1 -b .CVE-2022-22822-CVE-2022-22827
-%patch9 -p1 -b .CVE-2022-25236
-%patch10 -p1 -b .CVE-2022-25235
-%patch11 -p1 -b .CVE-2022-25315
-%patch12 -p1 -b .CVE-2022-40674
-%patch13 -p1 -b .CVE-2016-9063
-%patch14 -p1 -b .CVE-2024-45491
+%setup -q -n libexpat-R_%{unversion}/expat
+pushd ..
+%patch0 -p1 -b .CVE-2023-52425
+%patch1 -p1 -b .CVE-2024-28757
+%patch2 -p1 -b .CVE-2024-45490
+%patch3 -p1 -b .CVE-2024-45491
+%patch4 -p1 -b .CVE-2024-45492
+%patch5 -p1 -b .CVE-2024-50602
+%patch6 -p1 -b .CVE-2024-8176
+%patch7 -p1 -b .CVE-2025-59375
+%patch8 -p1 -b .CVE-2026-45186
+%patch9 -p1 -b .CVE-2026-50219
+%patch10 -p1 -b .CVE-2026-56132
+%patch11 -p1 -b .CVE-2026-93990
+%patch12 -p1 -b .CVE-2026-66046
+%patch13 -p1 -b .CVE-2026-77214
+%patch14 -p1 -b .CVE-2026-102633
+%patch1001 -p1 -b .CVE-2026-24515
+%patch1002 -p1 -b .CVE-2026-32776
+%patch1003 -p1 -b .CVE-2026-32777
+%patch1004 -p1 -b .CVE-2026-32778
+%patch1005 -p1 -b .CVE-2026-56131
+%patch1006 -p1 -b .CVE-2026-76957
+%patch1007 -p1 -b .CVE-2026-117610
+%patch1008 -p1 -b .CVE-2026-56412
+%patch1009 -p1 -b .CVE-2026-56407
+%patch1010 -p1 -b .CVE-2026-56403
+%patch1011 -p1 -b .CVE-2026-118370
+%patch1012 -p1 -b .CVE-2026-41080
+%patch1013 -p1 -b .CVE-2026-56404
+%patch1014 -p1 -b .CVE-2026-56405
+%patch1015 -p1 -b .ciq-tests
+%patch1016 -p1 -b .ciq-atomic-counter
+%patch1017 -p1 -b .ciq-pe-value-drain
+popd
+
+sed -i 's/install-data-hook/do-nothing-please/' lib/Makefile.am
+./buildconf.sh
 
 %build
-rm -rf autom4te*.cache
-libtoolize --copy --force --automake && aclocal && autoheader && autoconf
 export CFLAGS="$RPM_OPT_FLAGS -fPIC"
+export DOCBOOK_TO_MAN="xmlto man --skip-validation"
 %configure
 make %{?_smp_mflags}
 
 %install
-rm -rf ${RPM_BUILD_ROOT}
-
-rm -f examples/*.dsp
-chmod 644 README COPYING Changes doc/* examples/*
-
 make install DESTDIR=$RPM_BUILD_ROOT
 
 rm -f $RPM_BUILD_ROOT%{_libdir}/*.la
+# EL7: %%doc uses a versioned docdir; drop the docs make install puts here
+rm -rf $RPM_BUILD_ROOT%{_datadir}/doc/expat
 
 %check
-make check
+bash -c "for i in {1..500000}; do printf AAAAAAAAAAAAAAAAAAAA >> achars.txt; done"
+for testfile in ../testdata/largefiles/aaaaaa_*; do
+        first_part="$(sed 's/\(.*\)ACHARS.*/\1/g' $testfile)"
+        second_part="$(sed 's/.*ACHARS\(.*\)/\1/g' $testfile)"
+        printf "$first_part" > "$testfile"
+        cat achars.txt >> "$testfile"
+        printf "$second_part" >> "$testfile"
+done
 
-%clean
-rm -rf ${RPM_BUILD_ROOT}
+make check
+# CIQ: on EL7 "make check" runs nothing (automake 1.13's test-driver
+# mis-parses the arguments from expat's test-driver-wrapper.sh and reports
+# PASS without running anything), so also run both test binaries directly
+# and fail the build if either fails.
+make -C tests runtests runtestspp
+for t in runtests runtestspp; do
+  timeout 1800 tests/$t -v > $t.out 2>&1 || { grep -E '^FAIL|ERROR|Checks:' $t.out; exit 1; }
+  grep -E 'Checks:' $t.out
+done
 
 %post -p /sbin/ldconfig
 %postun -p /sbin/ldconfig
 
 %files
-%defattr(-,root,root)
-%doc README COPYING
+%{!?_licensedir:%global license %%doc}
+%doc AUTHORS Changes
+%license COPYING
 %{_bindir}/*
 %{_libdir}/lib*.so.*
 %{_mandir}/*/*
 
 %files devel
-%defattr(-,root,root)
-%doc Changes doc examples
+%doc doc/reference.html doc/*.css examples/*.c
 %{_libdir}/lib*.so
 %{_libdir}/pkgconfig/*.pc
 %{_includedir}/*.h
+%{_libdir}/cmake/expat-%{version}
 
 %files static
-%defattr(-,root,root)
 %{_libdir}/lib*.a
 
 %changelog
-* Fri Sep 04 2026 Jason Rodriguez <jrodriguez@ciq.com> - 2.1.0-16.1
-- Fix CVE-2024-45491
+* Mon Nov 16 2026 Jeff Uphoff <juphoff@ciq.com> - 2.5.0-6.1
+- Rebase CentOS 7 Bridge expat from 2.1.0-16.1 to Rocky Linux 8.10
+  expat-2.5.0-6.el8_10 (libexpat.so.1 ABI preserved)
+- Fixed by the rebase: CVE-2012-6702, CVE-2013-0340, CVE-2016-5300,
+  CVE-2017-9233, CVE-2022-25313, CVE-2022-43680, CVE-2023-52425,
+  CVE-2024-8176, CVE-2024-45490, CVE-2024-45492, CVE-2024-50602,
+  CVE-2026-45186, CVE-2026-50219, CVE-2026-56132, CVE-2026-66046,
+  CVE-2026-76641, CVE-2026-77214, CVE-2026-93990
+- Backport upstream fixes: CVE-2026-24515, CVE-2026-32776, CVE-2026-32777,
+  CVE-2026-32778, CVE-2026-41080, CVE-2026-56131, CVE-2026-56403,
+  CVE-2026-56404, CVE-2026-56405, CVE-2026-56407, CVE-2026-56412,
+  CVE-2026-76957, CVE-2026-117610, CVE-2026-118370
+- Add the upstream regression tests for these backports (ported to 2.5.0)
+- Increment Patch0's shared test-only parse counter atomically (data race
+  between parsers in different threads)
+- Expand nested entities in external parameter-entity values (regression
+  from the CVE-2024-8176 rework in Patch6; also present upstream)
+- EL7 build: explicit ldconfig scriptlets; drop unversioned doc dir;
+  run the test binaries directly in %%check (make check is a no-op on EL7)
 
-* Thu Nov 21 2024 Matt Hink <mhink@ciq.com> - 2.1.0-16
-- Fix CVE-2016-9063
+* Mon Oct 12 2026 RHEL Packaging Agent <redhat-ymir-agent@redhat.com> - 2.5.0-6
+- CVE-2026-102633 expat: expat: Denial of Service via integer overflow
+  in expat_realloc
+- Resolves: RHEL-272828
 
-* Mon Oct 03 2022 Tomas Korbar <tkorbar@redhat.com> - 2.1.0-15
+* Mon Oct 12 2026 RHEL Packaging Agent <redhat-ymir-agent@redhat.com> - 2.5.0-5
+- CVE-2026-77214 expat: expat: Information disclosure via heap buffer over-read in XML_ParseBuffer
+  over-read in XML_ParseBuffer
+- Resolves: RHEL-277497
+
+* Thu Sep 24 2026 RHEL Packaging Agent <redhat-ymir-agent@redhat.com> - 2.5.0-4
+- Fix CVE-2026-66046 in expat
+- Resolves: RHEL-260142
+
+* Thu Sep 24 2026 RHEL Packaging Agent <redhat-ymir-agent@redhat.com> - 2.5.0-3
+- CVE-2026-93990 expat: Expat: XML Injection via Malformed UTF-16 Input
+- Resolves: RHEL-268995
+
+* Fri Jul 31 2026 RHEL Packaging Agent <redhat-ymir-agent@redhat.com> - 2.5.0-2.2
+- Fix CVE-2026-56132: out-of-bound scaffolding index store in doProlog
+- Resolves: RHEL-221012
+
+* Fri Jul 31 2026 RHEL Packaging Agent <redhat-ymir-agent@redhat.com> - 2.5.0-2.1
+- Fix CVE-2026-50219
+- Resolves: RHEL-220979
+
+* Thu May 28 2026 RHEL Packaging Agent <redhat-ymir-agent@redhat.com> - 2.5.0-2
+- Fix CVE-2026-45186
+- Resolves: RHEL-177979
+
+* Wed Nov 19 2025 Tomas Korbar <tkorbar@redhat.com> - 2.5.0-1
+- Rebase to version 2.5.0
+- Fix CVE-2025-59375
+- Resolves: RHEL-114618
+
+* Mon Apr 07 2025 Tomas Korbar <tkorbar@redhat.com> - 2.2.5-17
+- Fix CVE-2024-8176
+- Resolves: RHEL-57477
+
+* Fri Nov 08 2024 Tomas Korbar <tkorbar@redhat.com> - 2.2.5-16
+- Fix CVE-2024-50602
+- Resolves: RHEL-65062
+
+* Wed Sep 11 2024 Tomas Korbar <tkorbar@redhat.com> - 2.2.5-15
+- Rebuild for test reconfiguration
+
+* Wed Sep 11 2024 Tomas Korbar <tkorbar@redhat.com> - 2.2.5-14
+- Fix multiple CVEs
+- Fix CVE-2024-45492 integer overflow
+- Fix CVE-2024-45491 Integer Overflow or Wraparound
+- Fix CVE-2024-45490 Negative Length Parsing Vulnerability
+- Resolves: RHEL-57505
+- Resolves: RHEL-57493
+- Resolves: RHEL-56751
+
+* Tue Mar 26 2024 Tomas Korbar <tkorbar@redhat.com> - 2.2.5-13
+- Fix wrongly exposed variables
+- Resolves: RHEL-29321
+
+* Thu Mar 21 2024 Tomas Korbar <tkorbar@redhat.com> - 2.2.5-12
+- CVE-2023-52425 expat: parsing large tokens can trigger a denial of service
+- Resolves: RHEL-29321
+
+* Mon Nov 14 2022 Tomas Korbar <tkorbar@redhat.com> - 2.2.5-11
+- CVE-2022-43680 expat: use-after free caused by overeager destruction of a shared DTD in XML_ExternalEntityParserCreate
+- Resolves: CVE-2022-43680
+
+* Fri Sep 30 2022 Tomas Korbar <tkorbar@redhat.com> - 2.2.5-10
 - Ensure raw tagnames are safe exiting internalEntityParser
 - Resolves: CVE-2022-40674
 
-* Mon Mar 21 2022 Tomas Korbar <tkorbar@redhat.com> - 2.1.0-14
+* Fri May 06 2022 Tomas Korbar <tkorbar@redhat.com> - 2.2.5-9
+- Fix multiple CVEs
+- Resolves: CVE-2022-25314
+- Resolves: CVE-2022-25313
+
+* Mon Mar 14 2022 Tomas Korbar <tkorbar@redhat.com> - 2.2.5-8
+- Improve patch for CVE-2022-25236
+- Related: CVE-2022-25236
+
+* Fri Mar 04 2022 Tomas Korbar <tkorbar@redhat.com> - 2.2.5-7
+- Fix patch for CVE-2022-25235
+- Resolves: CVE-2022-25235
+
+* Thu Mar 03 2022 Tomas Korbar <tkorbar@redhat.com> - 2.2.5-6
 - Fix multiple CVEs
 - CVE-2022-25236 expat: namespace-separator characters in "xmlns[:prefix]" attribute values can lead to arbitrary code execution
 - CVE-2022-25235 expat: malformed 2- and 3-byte UTF-8 sequences can lead to arbitrary code execution
@@ -134,7 +316,7 @@ rm -rf ${RPM_BUILD_ROOT}
 - Resolves: CVE-2022-25235
 - Resolves: CVE-2022-25315
 
-* Mon Feb 21 2022 Tomas Korbar <tkorbar@redhat.com> - 2.1.0-13
+* Fri Feb 14 2022 Tomas Korbar <tkorbar@redhat.com> -  2.2.5-5
 - Fix multiple CVEs
 - CVE-2022-23852 expat: integer overflow in function XML_GetBuffer
 - CVE-2021-45960 expat: Large number of prefixed XML attributes on a single tag can crash libexpat
@@ -153,25 +335,76 @@ rm -rf ${RPM_BUILD_ROOT}
 - Resolves: CVE-2022-22825
 - Resolves: CVE-2022-22824
 - Resolves: CVE-2022-22823
-- Resolves: CVE-2022-22822 
+- Resolves: CVE-2022-22822
 
-* Thu Apr  2 2020 Joe Orton <jorton@redhat.com> - 2.1.0-12
+* Fri Apr 24 2020 Joe Orton <jorton@redhat.com> - 2.2.5-4
 - add security fixes for CVE-2018-20843, CVE-2019-15903
 
-* Thu Jul 25 2019 Joe Orton <jorton@redhat.com> - 2.1.0-11
-- add security fix for CVE-2015-2716
+* Wed Feb 07 2018 Fedora Release Engineering <releng@fedoraproject.org> - 2.2.5-3
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_28_Mass_Rebuild
 
-* Thu Nov 24 2016 Joe Orton <jorton@redhat.com> - 2.1.0-10
-- updated security fix for CVE-2016-0718
+* Sat Feb 03 2018 Igor Gnatenko <ignatenkobrain@fedoraproject.org> - 2.2.5-2
+- Switch to %%ldconfig_scriptlets
 
-* Thu Nov 24 2016 Joe Orton <jorton@redhat.com> - 2.1.0-9
-- add security fix for CVE-2016-0718
+* Thu Nov  2 2017 Joe Orton <jorton@redhat.com> - 2.2.5-1
+- update to 2.2.5 (#1508667)
 
-* Fri Jan 24 2014 Daniel Mach <dmach@redhat.com> - 2.1.0-8
-- Mass rebuild 2014-01-24
+* Mon Aug 21 2017 Joe Orton <jorton@redhat.com> - 2.2.4-1
+- update to 2.2.4 (#1483359)
 
-* Fri Dec 27 2013 Daniel Mach <dmach@redhat.com> - 2.1.0-7
-- Mass rebuild 2013-12-27
+* Fri Aug  4 2017 Joe Orton <jorton@redhat.com> - 2.2.3-1
+- fix tests with unsigned char (upstream PR 109)
+- update to 2.2.3 (#1473266)
+
+* Wed Aug 02 2017 Fedora Release Engineering <releng@fedoraproject.org> - 2.2.2-4
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Binutils_Mass_Rebuild
+
+* Wed Jul 26 2017 Fedora Release Engineering <releng@fedoraproject.org> - 2.2.2-3
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_27_Mass_Rebuild
+
+* Fri Jul 14 2017 Joe Orton <jorton@redhat.com> - 2.2.2-2
+- update to 2.2.2 (#1470891)
+
+* Fri Jul  7 2017 Joe Orton <jorton@redhat.com> - 2.2.1-2
+- trim unnecessary doc, examples content
+
+* Mon Jun 19 2017 Joe Orton <jorton@redhat.com> - 2.2.1-1
+- update to 2.2.1 (#1462474)
+
+* Fri Feb 10 2017 Fedora Release Engineering <releng@fedoraproject.org> - 2.2.0-2
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_26_Mass_Rebuild
+
+* Tue Jun 21 2016 Joe Orton <jorton@redhat.com> - 2.2.0-1
+- update to 2.2.0 (#1247348)
+
+* Thu Jun 16 2016 Joe Orton <jorton@redhat.com> - 2.1.1-2
+- add security fixes for CVE-2016-0718, CVE-2012-6702, CVE-2016-5300,
+  CVE-2016-4472
+
+* Mon Apr 18 2016 David Tardon <dtardon@redhat.com> - 2.1.1-1
+- new upstream release
+
+* Wed Feb 03 2016 Fedora Release Engineering <releng@fedoraproject.org> - 2.1.0-13
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_24_Mass_Rebuild
+
+* Wed Jun 17 2015 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 2.1.0-12
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_23_Mass_Rebuild
+
+* Sat Feb 21 2015 Till Maas <opensource@till.name> - 2.1.0-11
+- Rebuilt for Fedora 23 Change
+  https://fedoraproject.org/wiki/Changes/Harden_all_packages_with_position-independent_code
+
+* Sat Aug 16 2014 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 2.1.0-10
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_21_22_Mass_Rebuild
+
+* Sat Jul 12 2014 Tom Callaway <spot@fedoraproject.org> - 2.1.0-9
+- fix license handling
+
+* Sat Jun 07 2014 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 2.1.0-8
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_21_Mass_Rebuild
+
+* Sat Aug 03 2013 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 2.1.0-7
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_20_Mass_Rebuild
 
 * Mon Jun 17 2013 Joe Orton <jorton@redhat.com> - 2.1.0-6
 - fix "xmlwf -h" output (#948534)
@@ -318,7 +551,7 @@ rm -rf ${RPM_BUILD_ROOT}
 - Change a prereq in -devel on main package to a req
 - License from MIT/X11 to BSD
 
-* Mon Mar 13 2002 Trond Eivind Glomsrød <teg@redhat.com>
+* Mon Mar 11 2002 Trond Eivind Glomsrød <teg@redhat.com>
 - 1.95.2
 
 * Sun Jun 24 2001 Elliot Lee <sopwith@redhat.com>

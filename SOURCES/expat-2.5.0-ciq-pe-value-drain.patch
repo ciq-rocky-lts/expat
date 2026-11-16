@@ -1,0 +1,131 @@
+Expand nested entities in external parameter-entity values
+
+Since the CVE-2024-8176 rework (Rocky Patch6, Red Hat's backport as shipped in
+RHEL 8.10; also upstream 2.7.0 through at least 2.9.0), storeEntityValue()
+queues nested parameter-entity references on m_openValueEntities and only
+callStoreEntityValue() drains that queue. entityValueInitProcessor() and
+entityValueProcessor(), which store the value of an external parameter entity,
+still called storeEntityValue() directly, so a nested reference inside such an
+entity (e.g. <!ENTITY % pe SYSTEM 'pe.ent'><!ENTITY ge '%pe;'> with pe.ent
+containing %inner;) was silently dropped, left the entity marked open, and a
+later recursive reference went undetected. Route both through
+callStoreEntityValue(). Adds two regression tests (both fail without the fix).
+Reported by Damenbot on centos/cbr/src/expat !2.
+
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 84d7222..741b56a 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -5149,8 +5149,8 @@ entityValueInitProcessor(XML_Parser parser, const char *s, const char *end,
+         break;
+       }
+       /* found end of entity value - can store it now */
+-      return storeEntityValue(parser, parser->m_encoding, s, end,
+-                              XML_ACCOUNT_DIRECT, NULL);
++      return callStoreEntityValue(parser, parser->m_encoding, s, end,
++                                  XML_ACCOUNT_DIRECT);
+     } else if (tok == XML_TOK_XML_DECL) {
+       enum XML_Error result;
+       result = processXmlDecl(parser, 0, start, next);
+@@ -5277,7 +5277,7 @@ entityValueProcessor(XML_Parser parser, const char *s, const char *end,
+         break;
+       }
+       /* found end of entity value - can store it now */
+-      return storeEntityValue(parser, enc, s, end, XML_ACCOUNT_DIRECT, NULL);
++      return callStoreEntityValue(parser, enc, s, end, XML_ACCOUNT_DIRECT);
+     }
+     /* If we get this token, we have the start of what might be a
+        normal tag, but not a declaration (i.e. it doesn't begin with
+diff --git a/expat/tests/runtests.c b/expat/tests/runtests.c
+index 31be5d7..379651e 100644
+--- a/expat/tests/runtests.c
++++ b/expat/tests/runtests.c
+@@ -7804,6 +7804,77 @@ START_TEST(test_empty_ext_param_entity_in_value) {
+ }
+ END_TEST
+ 
++/* CIQ: nested parameter entities inside an external parameter entity used in
++   an entity value must be expanded (and recursion detected) on that path too;
++   reported by Damenbot on centos/cbr/src/expat !2 */
++static XML_Char g_ciq_ge_value[64];
++static int g_ciq_ge_seen;
++
++static void XMLCALL
++ciq_record_ge_value(void *userData, const XML_Char *entityName,
++                    int is_parameter_entity, const XML_Char *value,
++                    int value_length, const XML_Char *base,
++                    const XML_Char *systemId, const XML_Char *publicId,
++                    const XML_Char *notationName) {
++  UNUSED_P(userData);
++  UNUSED_P(base);
++  UNUSED_P(systemId);
++  UNUSED_P(publicId);
++  UNUSED_P(notationName);
++  if (is_parameter_entity || xcstrcmp(entityName, XCS("ge")) != 0)
++    return;
++  g_ciq_ge_seen = 1;
++  if (value == NULL || value_length < 0
++      || value_length >= (int)(sizeof(g_ciq_ge_value) / sizeof(XML_Char)))
++    return;
++  memcpy(g_ciq_ge_value, value, (size_t)value_length * sizeof(XML_Char));
++  g_ciq_ge_value[value_length] = XCS('\0');
++}
++
++START_TEST(test_ciq_nested_pe_in_external_entity_value) {
++  const char *text = "<!DOCTYPE r SYSTEM \"ext.dtd\"><r/>";
++  ExtOption options[] = {
++      {XCS("ext.dtd"), "<!ENTITY % inner 'hello'>"
++                       "<!ENTITY % pe SYSTEM \"pe.ent\">"
++                       "<!ENTITY ge \"%pe;\">"},
++      {XCS("pe.ent"), "%inner;"},
++      {NULL, NULL},
++  };
++
++  g_ciq_ge_seen = 0;
++  g_ciq_ge_value[0] = XCS('\0');
++  XML_SetParamEntityParsing(g_parser, XML_PARAM_ENTITY_PARSING_ALWAYS);
++  XML_SetExternalEntityRefHandler(g_parser, external_entity_optioner);
++  XML_SetEntityDeclHandler(g_parser, ciq_record_ge_value);
++  XML_SetUserData(g_parser, options);
++  if (_XML_Parse_SINGLE_BYTES(g_parser, text, (int)strlen(text), XML_TRUE)
++      == XML_STATUS_ERROR)
++    xml_failure(g_parser);
++  assert_true(g_ciq_ge_seen);
++  assert_true(xcstrcmp(g_ciq_ge_value, XCS("hello")) == 0);
++}
++END_TEST
++
++START_TEST(test_ciq_recursive_pe_in_external_entity_value) {
++  const char *text = "<!DOCTYPE r SYSTEM \"ext.dtd\"><r/>";
++  ExtOption options[] = {
++      {XCS("ext.dtd"), "<!ENTITY % inner 'hello'>"
++                       "<!ENTITY % pe SYSTEM \"pe.ent\">"
++                       "<!ENTITY ge \"%pe;\">"},
++      {XCS("pe.ent"), "%inner;%pe;"},
++      {NULL, NULL},
++  };
++
++  XML_SetParamEntityParsing(g_parser, XML_PARAM_ENTITY_PARSING_ALWAYS);
++  XML_SetExternalEntityRefHandler(g_parser, external_entity_optioner);
++  XML_SetUserData(g_parser, options);
++  assert_true(_XML_Parse_SINGLE_BYTES(g_parser, text, (int)strlen(text),
++                                      XML_TRUE)
++              == XML_STATUS_ERROR);
++  assert_true(XML_GetErrorCode(g_parser) == XML_ERROR_EXTERNAL_ENTITY_HANDLING);
++}
++END_TEST
++
+ static void XMLCALL
+ accumulate_and_suspend_comment_handler(void *userData, const XML_Char *data) {
+   ParserPlusStorage *const parserPlusStorage = (ParserPlusStorage *)userData;
+@@ -14827,6 +14898,10 @@ make_suite(void) {
+   tcase_add_test__ifdef_xml_dtd(tc_basic,
+                                 test_pool_integrity_with_unfinished_attr);
+   tcase_add_test__ifdef_xml_dtd(tc_basic, test_empty_ext_param_entity_in_value);
++  tcase_add_test__ifdef_xml_dtd(tc_basic,
++                               test_ciq_nested_pe_in_external_entity_value);
++  tcase_add_test__ifdef_xml_dtd(tc_basic,
++                               test_ciq_recursive_pe_in_external_entity_value);
+   tcase_add_test__ifdef_xml_dtd(tc_basic, test_entity_ref_no_elements);
+   tcase_add_test__ifdef_xml_dtd(tc_basic, test_deep_nested_entity);
+   tcase_add_test__ifdef_xml_dtd(tc_basic, test_deep_nested_attribute_entity);
