@@ -3,7 +3,7 @@
 Summary: An XML parser library
 Name: expat
 Version: %(echo %{unversion} | sed 's/_/./g')
-Release:        5.4%{?dist}
+Release:        5.5%{?dist}
 Source: https://github.com/libexpat/libexpat/archive/R_%{unversion}.tar.gz#/expat-%{version}.tar.gz
 URL: https://libexpat.github.io/
 License: MIT
@@ -31,6 +31,8 @@ Patch8: expat-2.5.0-CVE-2026-45186.patch
 Patch1001: CVE-2026-93990.patch
 # CVE-2026-66046
 Patch1002: expat-2.5.0-CVE-2026-66046.patch
+# CVE-2026-77214 - verbatim from Rocky Linux: https://git.rockylinux.org/staging/rpms/expat/-/raw/89fe1b7475e70bb775f8e42fb1d77f66b79fd2c6/SOURCES/expat-2.5.0-CVE-2026-77214.patch
+Patch1003: expat-2.5.0-CVE-2026-77214.patch
 
 %description
 This is expat, the C library for parsing XML, written by James Clark. Expat
@@ -71,6 +73,7 @@ pushd ..
 
 %patch1001 -p1 -b .CVE-2026-93990
 %patch1002 -p1 -b .CVE-2026-66046
+%patch1003 -p1 -b .CVE-2026-77214
 popd
 
 sed -i 's/install-data-hook/do-nothing-please/' lib/Makefile.am
@@ -119,6 +122,9 @@ make check
 %{_libdir}/lib*.a
 
 %changelog
+* Thu Nov 19 2026 pmp <packager@ciq.com> - 2.5.0-5.5
+- Fix CVE-2026-77214
+
 * Thu Nov 12 2026 pmp <packager@ciq.com> - 2.5.0-5.4
 - Fix CVE-2026-66046
 
